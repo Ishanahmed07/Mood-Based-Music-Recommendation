@@ -13,6 +13,7 @@
         margin: 0;
         padding: 0;
         display: flex;
+        flex-direction: column; /* Allow vertical stacking for title + container */
         justify-content: center;
         align-items: center;
         min-height: 100vh; /* Full viewport height */
@@ -272,6 +273,62 @@
         font-style: italic;
       }
 
+      /* User Input Section */
+      .user-input-section {
+        background: #121212;
+        padding: 25px 30px;
+        border-radius: 10px;
+        margin-top: 30px; /* Space from controls */
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+      }
+
+      .user-input-section p {
+        font-size: 1.1em;
+        margin-bottom: 15px;
+        color: #fff;
+      }
+
+      .user-input-section textarea {
+        width: calc(100% - 20px); /* Account for padding */
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #333;
+        background: #282828;
+        color: #e0e0e0;
+        font-size: 1em;
+        resize: vertical; /* Allow vertical resizing */
+        min-height: 60px;
+        margin-bottom: 15px;
+      }
+
+      .user-input-section button {
+        background: linear-gradient(
+          45deg,
+          #007bff,
+          #0056b3
+        ); /* Blue gradient */
+        color: white;
+        border: none;
+        padding: 10px 25px;
+        border-radius: 25px;
+        cursor: pointer;
+        font-size: 1em;
+        font-weight: bold;
+        transition: all 0.3s ease;
+      }
+
+      .user-input-section button:hover {
+        background: linear-gradient(45deg, #0056b3, #007bff);
+        transform: translateY(-1px);
+      }
+      .user-input-section button:disabled {
+        background: #555;
+        cursor: not-allowed;
+        box-shadow: none;
+        transform: none;
+      }
+
       /* Responsive Adjustments */
       @media (max-width: 992px) {
         .main-container {
@@ -355,6 +412,21 @@
           </button>
           <button id="stop-btn" onclick="stopDetection()">Stop Session</button>
         </div>
+
+        <div class="user-input-section">
+          <p>Tell us about your day, and we'll refine your recommendations!</p>
+          <textarea
+            id="day-description"
+            placeholder="e.g., 'Feeling great after a productive day!', 'A bit stressed from work.', 'Just relaxing at home.'"
+          ></textarea>
+          <button id="submit-day-btn" onclick="submitDayDescription()" disabled>
+            Get Smarter Songs
+          </button>
+          <div
+            id="submit-status"
+            style="margin-top: 10px; color: #1db954; font-size: 0.9em"
+          ></div>
+        </div>
       </div>
       <div class="results-section">
         <h2 class="emotion-header">
@@ -373,10 +445,10 @@
     <script>
       let detectionStarted = false;
       let intervalId = null;
-      let videoFeedElement = null; // Reference to the video feed element
-      let lastDetectedEmotion = "Click 'Start Listening' to begin"; // Store the last detected emotion
+      let videoFeedElement = null;
+      let lastDetectedEmotion = "Click 'Start Listening' to begin";
+      let userDayDescription = ""; // New: Store user's description
 
-      // Mapping for emojis and default text
       const emotionEmojis = {
         Happy: "😊 Happy",
         Sad: "😔 Sad",
@@ -389,27 +461,27 @@
         "Error fetching data.": "⚠️ Error!",
         "Error: Could not start video feed.": "⚠️ Error starting video!",
         "No Face": "👤 Looking for face...",
-        "Processing...": "⚙️ Processing...", // Added for initial processing phase
+        "Processing...": "⚙️ Processing...",
+        "Ready for Input": "✍️ Ready for input", // New status
       };
 
-      // Function to update the emotion display (icon and text)
       function updateEmotionDisplay(emotionKey) {
         const emotionTextSpan = document.getElementById("emotion-text");
         const emotionIconSpan = document.getElementById("emotion-icon");
         const overlayEmotionDiv = document.getElementById("overlay-emotion");
 
-        let displayText = emotionEmojis[emotionKey] || emotionKey; // Fallback to key if not found
+        let displayText = emotionEmojis[emotionKey] || emotionKey;
 
-        emotionIconSpan.innerText = displayText.split(" ")[0]; // First part is emoji
+        emotionIconSpan.innerText = displayText.split(" ")[0];
         emotionTextSpan.innerText = displayText.substring(
           displayText.indexOf(" ") + 1
-        ); // Rest is text
+        );
 
-        // Update overlay text as well
         overlayEmotionDiv.innerText = displayText;
         overlayEmotionDiv.style.display =
           emotionKey === "Detecting..." ||
-          emotionKey === "Click 'Start Listening' to begin"
+          emotionKey === "Click 'Start Listening' to begin" ||
+          emotionKey === "Ready for Input"
             ? "none"
             : "block";
       }
@@ -418,7 +490,8 @@
         videoFeedElement = document.getElementById("video-feed");
         document.getElementById("start-btn").style.display = "inline-block";
         document.getElementById("stop-btn").style.display = "none";
-        updateEmotionDisplay(lastDetectedEmotion); // Set initial display
+        document.getElementById("submit-day-btn").disabled = true; // Disable submit button initially
+        updateEmotionDisplay(lastDetectedEmotion);
       });
 
       function startDetection() {
@@ -427,57 +500,54 @@
         detectionStarted = true;
         document.getElementById("start-btn").style.display = "none";
         document.getElementById("stop-btn").style.display = "inline-block";
-        updateEmotionDisplay("Detecting..."); // Show detecting message
+        document.getElementById("submit-day-btn").disabled = false; // Enable submit button
+        updateEmotionDisplay("Detecting...");
 
         document.getElementById("video-container").style.display = "block";
         videoFeedElement.src = "{{ url_for('video_feed') }}";
 
         videoFeedElement.onload = () => {
           console.log("Video feed started loading.");
-          // Short delay before starting emotion fetch to allow video to stabilize
           setTimeout(() => {
-            intervalId = setInterval(fetchEmotionAndSongs, 3000); // Fetch emotion every 3 seconds
+            intervalId = setInterval(fetchEmotionAndSongs, 3000);
           }, 500);
         };
 
         videoFeedElement.onerror = () => {
           console.error("Failed to load video feed.");
-          // If video fails, try to show the last good emotion or a specific error
           const errorMsg = "Error: Could not start video feed.";
           updateEmotionDisplay(
             lastDetectedEmotion !== "Click 'Start Listening' to begin"
               ? lastDetectedEmotion
               : errorMsg
           );
-          stopDetection(false, false); // Stop, don't clear songs, don't preserve generic "Detection stopped."
+          stopDetection(false, false);
         };
       }
 
-      // Added a new parameter `preserveEmotion`
       function stopDetection(clearSongs = false, preserveEmotion = true) {
         if (!detectionStarted && !intervalId) return;
 
         console.log("Stopping detection...");
         detectionStarted = false;
         if (intervalId) {
-          clearInterval(intervalId); // Stop fetching emotion/songs
+          clearInterval(intervalId);
           intervalId = null;
         }
 
         document.getElementById("start-btn").style.display = "inline-block";
         document.getElementById("stop-btn").style.display = "none";
+        document.getElementById("submit-day-btn").disabled = true; // Disable submit button on stop
 
-        // Stop the video stream
         if (videoFeedElement) {
-          videoFeedElement.src = ""; // Clear the src to stop the stream
-          document.getElementById("video-container").style.display = "none"; // Hide video container
+          videoFeedElement.src = "";
+          document.getElementById("video-container").style.display = "none";
         }
 
-        // Set emotion display based on the new `preserveEmotion` flag
         if (preserveEmotion) {
-          updateEmotionDisplay(lastDetectedEmotion); // Show the last detected emotion
+          updateEmotionDisplay(lastDetectedEmotion);
         } else {
-          updateEmotionDisplay("Detection stopped."); // Generic stop message
+          updateEmotionDisplay("Detection stopped.");
         }
 
         if (clearSongs) {
@@ -487,29 +557,56 @@
         }
       }
 
+      // New function to handle user input submission
+      function submitDayDescription() {
+        const description = document
+          .getElementById("day-description")
+          .value.trim();
+        const submitStatusDiv = document.getElementById("submit-status");
+
+        if (description === "") {
+          submitStatusDiv.style.color = "#dc3545";
+          submitStatusDiv.innerText = "Please describe your day.";
+          return;
+        }
+
+        userDayDescription = description;
+        submitStatusDiv.style.color = "#1DB954";
+        submitStatusDiv.innerText = "Thanks! Refining recommendations...";
+
+        // You might want to trigger a song refresh here if the user's input
+        // is expected to immediately change the recommendations.
+        // For now, it will simply be used in the next scheduled fetchEmotionAndSongs call.
+        // If you want immediate refresh:
+        fetchEmotionAndSongs(); // Force an immediate refresh with new input
+      }
+
       function fetchEmotionAndSongs() {
-        if (!detectionStarted) return; // Ensure detection is active before fetching
-        fetch("/get_emotion_and_songs")
+        if (!detectionStarted) return;
+
+        // Include userDayDescription in the fetch request
+        fetch(
+          "/get_emotion_and_songs?day_description=" +
+            encodeURIComponent(userDayDescription)
+        )
           .then((response) => response.json())
           .then((data) => {
-            // Update emotion display only if a valid emotion is received
             if (data.emotion && data.emotion !== "Detecting...") {
-              lastDetectedEmotion = data.emotion; // Store the last detected emotion
+              lastDetectedEmotion = data.emotion;
               updateEmotionDisplay(data.emotion);
             } else if (data.emotion === "No Face") {
-              updateEmotionDisplay("No Face"); // Show "No Face" immediately
+              updateEmotionDisplay("No Face");
             } else if (data.emotion === "Processing...") {
               updateEmotionDisplay("Processing...");
             }
 
             let songsContainer = document.getElementById("songs-container");
-            songsContainer.innerHTML = ""; // Clear previous cards
+            songsContainer.innerHTML = "";
 
             if (data.songs && data.songs.length > 0) {
               data.songs.forEach(function (song) {
                 let songCard = document.createElement("div");
                 songCard.classList.add("song-card");
-                // song[0] is Name, song[1] is Artist, song[2] is URL
                 songCard.innerHTML = `
                     <a href="${song[2]}" target="_blank">
                         <div class="song-info">
@@ -520,8 +617,9 @@
                   `;
                 songsContainer.appendChild(songCard);
               });
+              // Clear submit status after successful song update
+              document.getElementById("submit-status").innerText = "";
             } else {
-              // Display specific message if detection is active but no songs or "no face"
               if (
                 detectionStarted &&
                 (data.emotion === "No Face" || data.emotion === "Processing...")
@@ -531,7 +629,7 @@
                 }.</div>`;
               } else {
                 songsContainer.innerHTML =
-                  "<div class='initial-message'>No recommendations yet or for this emotion.</div>";
+                  "<div class='initial-message'>No recommendations yet or for this emotion. Try describing your day!</div>";
               }
             }
           })
@@ -541,6 +639,9 @@
             let songsContainer = document.getElementById("songs-container");
             songsContainer.innerHTML =
               "<div class='initial-message'>Failed to load recommendations. Please try again.</div>";
+            document.getElementById("submit-status").style.color = "#dc3545";
+            document.getElementById("submit-status").innerText =
+              "Failed to get songs after input.";
           });
       }
     </script>

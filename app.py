@@ -1,62 +1,49 @@
-from flask import Flask, render_template, Response, jsonify
-# import gunicorn # This import is generally not needed for running with `python app.py`
-from camera import VideoCamera, emotion_dict, show_text, music_rec # Import VideoCamera and other necessary globals
-import time # Import time for potential delay if no frame is returned
+from flask import Flask, render_template, Response, jsonify, request # Import request
+# Make sure to import the updated music_rec
+from camera import VideoCamera, emotion_dict, show_text, music_rec 
+import time
 
 app = Flask(__name__)
 
-# No global camera object here to prevent early initialization
-
-headings = ("Name","Album","Artist")
+headings = ("Name","Artist","URL") # Added URL to headings
 
 @app.route('/')
 def index():
-    # Initial state for emotion and songs before detection starts
-    detected_emotion = "Click 'Start' to begin"
-    initial_songs_data = [] # Empty list for initial display
+    detected_emotion = "Click 'Start Listening' to begin"
+    initial_songs_data = []
     return render_template('index.html', headings=headings, data=initial_songs_data, emotion=detected_emotion)
 
 def gen(camera):
-    # This loop continuously yields frames from the camera
     while True:
-        frame_bytes, df_songs = camera.get_frame() # get_frame returns bytes and dataframe
+        frame_bytes, _ = camera.get_frame()
         if frame_bytes:
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n\r\n')
         else:
-            # If no frame is returned, wait a bit to avoid busy-waiting and try again
             time.sleep(0.1)
 
 @app.route('/video_feed')
 def video_feed():
-    # Initialize the camera only when this route is accessed
-    # This ensures the camera opens when the client requests the video feed
     return Response(gen(VideoCamera()), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/get_emotion_and_songs')
 def get_emotion_and_songs():
-    # This route is called by JavaScript to get the latest emotion and song recommendations.
-    # It doesn't initiate video capture itself.
-    
-    # We need a way to get the *latest* emotion from the active VideoCamera instance
-    # that is feeding the /video_feed route.
-    # The 'show_text' list is used for this global communication.
-    
-    detected_emotion = emotion_dict.get(show_text[0], "Detecting...")
-    
-    # Call music_rec to get new recommendations for the current emotion
-    # Ensure music_rec uses the updated show_text[0]
-    df = music_rec()
+    # Get the day description from the query parameters
+    day_description = request.args.get('day_description', '') # Default to empty string
+
+    # Get the detected emotion string using the stored key
+    current_emotion_key = show_text[0]
+    detected_emotion_str = emotion_dict.get(current_emotion_key, "Detecting...")
+
+    # Call music_rec with both emotion and day description
+    df = music_rec(detected_emotion_str, day_description) # Pass emotion string and description
     
     songs = []
-    # Ensure df is a DataFrame before iterating
-    if df is not None:
+    if df is not None and not df.empty:
         for _, row in df.iterrows():
-            # music_rec in camera.py now returns a DataFrame directly with Name, Artist, URL
-            # assuming 'URL' is a column with the Spotify link
-            songs.append([row['Name'], row['Artist'], row['URL']]) # Directly use URL column
+            songs.append([row['Name'], row['Artist'], row['spotify_url']]) 
     
-    return jsonify({'emotion': detected_emotion, 'songs': songs})
+    return jsonify({'emotion': detected_emotion_str, 'songs': songs})
 
 if __name__ == '__main__':
     app.debug = True
