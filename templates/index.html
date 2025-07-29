@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Mood-Based Music Recommender</title>
+    <style>
+      /* General Styles */
+      body {
+        font-family: "Open Sans", "Segoe UI", Tahoma, Geneva, Verdana,
+          sans-serif;
+        background: #0c0c0c; /* Very dark background */
+        color: #e0e0e0; /* Light gray text */
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh; /* Full viewport height */
+        overflow-x: hidden; /* Prevent horizontal scroll */
+      }
+
+      h1 {
+        color: #fff;
+        text-align: center;
+        margin-bottom: 30px;
+        font-size: 2.5em;
+        font-weight: 700;
+        text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+      }
+
+      /* Main Container Layout */
+      .main-container {
+        display: flex;
+        flex-wrap: wrap; /* Allow wrapping on smaller screens */
+        max-width: 1200px; /* Max width for content */
+        width: 95%; /* Responsive width */
+        margin: 40px auto; /* Center the container */
+        background: #1a1a1a; /* Slightly lighter dark background for the container */
+        border-radius: 12px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7); /* More prominent shadow */
+        overflow: hidden; /* For rounded corners */
+        min-height: 600px; /* Minimum height for better appearance */
+      }
+
+      /* Video Section */
+      .video-section {
+        flex: 2; /* Takes 2 parts of space */
+        padding: 30px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #121212; /* Even darker background for video area */
+        border-right: 1px solid rgba(255, 255, 255, 0.05); /* Subtle separator */
+      }
+
+      #video-container {
+        width: 100%;
+        max-width: 480px; /* Maintain video aspect ratio/size */
+        aspect-ratio: 4/3; /* Standard camera aspect ratio */
+        background-color: #000; /* Black background for video area */
+        border-radius: 10px;
+        overflow: hidden;
+        position: relative; /* For overlay text */
+        display: none; /* Hidden by default */
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+      }
+
+      #video-feed {
+        width: 100%;
+        height: 100%;
+        object-fit: cover; /* Ensures video covers container */
+        display: block; /* Remove extra space below img */
+      }
+
+      .overlay-text {
+        /* Optional: For emotion text directly on video */
+        position: absolute;
+        bottom: 15px; /* Position at bottom */
+        left: 15px;
+        background-color: rgba(0, 0, 0, 0.6);
+        color: white;
+        padding: 8px 15px;
+        border-radius: 8px;
+        font-size: 1.3em;
+        font-weight: bold;
+        display: none; /* Hidden until emotion detected */
+      }
+
+      /* Control Buttons */
+      .control-buttons {
+        margin-top: 30px;
+        display: flex;
+        gap: 20px;
+      }
+
+      .control-buttons button {
+        padding: 12px 28px;
+        font-size: 1.1em;
+        color: #fff;
+        border: none;
+        border-radius: 30px; /* Pill-shaped buttons */
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-weight: bold;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+      }
+
+      #start-btn {
+        background: linear-gradient(
+          45deg,
+          #1db954,
+          #1ed760
+        ); /* Spotify Green gradient */
+        box-shadow: 0 4px 15px rgba(29, 185, 84, 0.4);
+      }
+
+      #start-btn:hover {
+        background: linear-gradient(45deg, #1ed760, #1db954);
+        transform: translateY(-2px);
+      }
+
+      #stop-btn {
+        background: linear-gradient(45deg, #dc3545, #e45b68); /* Red gradient */
+        box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);
+      }
+
+      #stop-btn:hover {
+        background: linear-gradient(45deg, #e45b68, #dc3545);
+        transform: translateY(-2px);
+      }
+
+      .control-buttons button:disabled {
+        background: #555;
+        cursor: not-allowed;
+        box-shadow: none;
+        transform: none;
+      }
+
+      /* Results Section */
+      .results-section {
+        flex: 3; /* Takes 3 parts of space */
+        padding: 30px;
+        background: #1a1a1a; /* Matches main container background */
+        color: #e0e0e0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .emotion-header {
+        color: #fff;
+        font-size: 1.8em;
+        margin-bottom: 25px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      #emotion-icon {
+        font-size: 1.5em; /* Larger emoji */
+        line-height: 1; /* Align with text */
+      }
+
+      h3 {
+        color: #fff;
+        margin-top: 20px;
+        margin-bottom: 15px;
+        font-size: 1.4em;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: 10px;
+      }
+
+      .songs-grid {
+        display: grid;
+        grid-template-columns: repeat(
+          auto-fill,
+          minmax(200px, 1fr)
+        ); /* Responsive grid */
+        gap: 20px;
+        flex-grow: 1; /* Allows it to take up available space */
+        overflow-y: auto; /* Scroll if too many songs */
+        padding-right: 10px; /* Space for scrollbar */
+      }
+
+      /* Custom scrollbar for webkit browsers */
+      .songs-grid::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      .songs-grid::-webkit-scrollbar-track {
+        background: #282828;
+        border-radius: 10px;
+      }
+
+      .songs-grid::-webkit-scrollbar-thumb {
+        background: #555;
+        border-radius: 10px;
+        transition: background 0.3s ease;
+      }
+
+      .songs-grid::-webkit-scrollbar-thumb:hover {
+        background: #1db954; /* Spotify green on hover */
+      }
+
+      .song-card {
+        background: #282828; /* Card background */
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .song-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7);
+      }
+
+      .song-card a {
+        display: flex;
+        flex-direction: column;
+        text-decoration: none;
+        color: inherit; /* Inherit text color from parent */
+        padding: 15px;
+        flex-grow: 1; /* Allows content to stretch */
+      }
+
+      /* If you manage to get album art */
+      /*
+      .album-art {
+        width: 100%;
+        height: auto;
+        border-radius: 6px;
+        margin-bottom: 10px;
+        object-fit: cover;
+      }
+      */
+
+      .song-info {
+        flex-grow: 1; /* Allows info to take up remaining space */
+        display: flex;
+        flex-direction: column;
+        justify-content: center; /* Center vertically if space allows */
+      }
+
+      .song-title {
+        font-weight: bold;
+        color: #1db954; /* Spotify Green for title */
+        font-size: 1.1em;
+        margin-bottom: 5px;
+        white-space: nowrap; /* Prevent wrapping */
+        overflow: hidden; /* Hide overflow */
+        text-overflow: ellipsis; /* Add ellipsis */
+      }
+
+      .song-artist {
+        color: #b3b3b3; /* Lighter gray for artist */
+        font-size: 0.9em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .initial-message {
+        grid-column: 1 / -1; /* Span across all columns in grid */
+        text-align: center;
+        color: #999;
+        padding: 50px;
+        font-size: 1.1em;
+        font-style: italic;
+      }
+
+      /* Responsive Adjustments */
+      @media (max-width: 992px) {
+        .main-container {
+          flex-direction: column; /* Stack sections vertically on medium screens */
+          width: 90%;
+          margin: 20px auto;
+        }
+        .video-section,
+        .results-section {
+          padding: 25px;
+          flex: none; /* Remove flex sizing */
+          border-right: none; /* Remove vertical border */
+          border-bottom: 1px solid rgba(255, 255, 255, 0.05); /* Add horizontal border */
+        }
+        .songs-grid {
+          grid-template-columns: repeat(
+            auto-fill,
+            minmax(180px, 1fr)
+          ); /* Adjust grid for medium screens */
+        }
+      }
+
+      @media (max-width: 576px) {
+        h1 {
+          font-size: 1.8em;
+          margin-bottom: 20px;
+        }
+        .main-container {
+          width: 100%;
+          margin: 0;
+          border-radius: 0;
+          box-shadow: none;
+          min-height: auto;
+        }
+        .video-section,
+        .results-section {
+          padding: 15px;
+        }
+        .control-buttons {
+          flex-direction: column;
+          gap: 15px;
+        }
+        .control-buttons button {
+          width: 100%;
+          padding: 10px 20px;
+        }
+        .emotion-header {
+          font-size: 1.5em;
+          flex-direction: column; /* Stack emotion icon and text */
+          text-align: center;
+          gap: 5px;
+        }
+        #emotion-icon {
+          font-size: 1.8em;
+        }
+        h3 {
+          font-size: 1.2em;
+        }
+        .songs-grid {
+          grid-template-columns: 1fr; /* Single column on small screens */
+          gap: 15px;
+        }
+        .song-card a {
+          padding: 10px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🎶 MoodTunes: Your Personal DJ 🎧</h1>
+
+    <div class="main-container">
+      <div class="video-section">
+        <div id="video-container">
+          <img id="video-feed" width="480" />
+          <div class="overlay-text" id="overlay-emotion"></div>
+        </div>
+        <div class="control-buttons">
+          <button id="start-btn" onclick="startDetection()">
+            Start Listening
+          </button>
+          <button id="stop-btn" onclick="stopDetection()">Stop Session</button>
+        </div>
+      </div>
+      <div class="results-section">
+        <h2 class="emotion-header">
+          <span id="emotion-icon"></span>
+          <span id="emotion-text">Click 'Start Listening' to begin</span>
+        </h2>
+        <h3>Recommended Tracks</h3>
+        <div id="songs-container" class="songs-grid">
+          <div class="initial-message">
+            Your personalized song recommendations will appear here!
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let detectionStarted = false;
+      let intervalId = null;
+      let videoFeedElement = null; // Reference to the video feed element
+      let lastDetectedEmotion = "Click 'Start Listening' to begin"; // Store the last detected emotion
+
+      // Mapping for emojis and default text
+      const emotionEmojis = {
+        Happy: "😊 Happy",
+        Sad: "😔 Sad",
+        Angry: "😡 Angry",
+        Surprise: "😮 Surprise",
+        Fear: "😨 Fear",
+        Neutral: "😐 Neutral",
+        Disgust: "🤢 Disgust",
+        "Detecting...": "⏳ Detecting...",
+        "Error fetching data.": "⚠️ Error!",
+        "Error: Could not start video feed.": "⚠️ Error starting video!",
+        "No Face": "👤 Looking for face...",
+        "Processing...": "⚙️ Processing...", // Added for initial processing phase
+      };
+
+      // Function to update the emotion display (icon and text)
+      function updateEmotionDisplay(emotionKey) {
+        const emotionTextSpan = document.getElementById("emotion-text");
+        const emotionIconSpan = document.getElementById("emotion-icon");
+        const overlayEmotionDiv = document.getElementById("overlay-emotion");
+
+        let displayText = emotionEmojis[emotionKey] || emotionKey; // Fallback to key if not found
+
+        emotionIconSpan.innerText = displayText.split(" ")[0]; // First part is emoji
+        emotionTextSpan.innerText = displayText.substring(
+          displayText.indexOf(" ") + 1
+        ); // Rest is text
+
+        // Update overlay text as well
+        overlayEmotionDiv.innerText = displayText;
+        overlayEmotionDiv.style.display =
+          emotionKey === "Detecting..." ||
+          emotionKey === "Click 'Start Listening' to begin"
+            ? "none"
+            : "block";
+      }
+
+      document.addEventListener("DOMContentLoaded", (event) => {
+        videoFeedElement = document.getElementById("video-feed");
+        document.getElementById("start-btn").style.display = "inline-block";
+        document.getElementById("stop-btn").style.display = "none";
+        updateEmotionDisplay(lastDetectedEmotion); // Set initial display
+      });
+
+      function startDetection() {
+        if (detectionStarted) return;
+
+        detectionStarted = true;
+        document.getElementById("start-btn").style.display = "none";
+        document.getElementById("stop-btn").style.display = "inline-block";
+        updateEmotionDisplay("Detecting..."); // Show detecting message
+
+        document.getElementById("video-container").style.display = "block";
+        videoFeedElement.src = "{{ url_for('video_feed') }}";
+
+        videoFeedElement.onload = () => {
+          console.log("Video feed started loading.");
+          // Short delay before starting emotion fetch to allow video to stabilize
+          setTimeout(() => {
+            intervalId = setInterval(fetchEmotionAndSongs, 3000); // Fetch emotion every 3 seconds
+          }, 500);
+        };
+
+        videoFeedElement.onerror = () => {
+          console.error("Failed to load video feed.");
+          // If video fails, try to show the last good emotion or a specific error
+          const errorMsg = "Error: Could not start video feed.";
+          updateEmotionDisplay(
+            lastDetectedEmotion !== "Click 'Start Listening' to begin"
+              ? lastDetectedEmotion
+              : errorMsg
+          );
+          stopDetection(false, false); // Stop, don't clear songs, don't preserve generic "Detection stopped."
+        };
+      }
+
+      // Added a new parameter `preserveEmotion`
+      function stopDetection(clearSongs = false, preserveEmotion = true) {
+        if (!detectionStarted && !intervalId) return;
+
+        console.log("Stopping detection...");
+        detectionStarted = false;
+        if (intervalId) {
+          clearInterval(intervalId); // Stop fetching emotion/songs
+          intervalId = null;
+        }
+
+        document.getElementById("start-btn").style.display = "inline-block";
+        document.getElementById("stop-btn").style.display = "none";
+
+        // Stop the video stream
+        if (videoFeedElement) {
+          videoFeedElement.src = ""; // Clear the src to stop the stream
+          document.getElementById("video-container").style.display = "none"; // Hide video container
+        }
+
+        // Set emotion display based on the new `preserveEmotion` flag
+        if (preserveEmotion) {
+          updateEmotionDisplay(lastDetectedEmotion); // Show the last detected emotion
+        } else {
+          updateEmotionDisplay("Detection stopped."); // Generic stop message
+        }
+
+        if (clearSongs) {
+          let songsContainer = document.getElementById("songs-container");
+          songsContainer.innerHTML =
+            "<div class='initial-message'>Click 'Start Listening' to get recommendations.</div>";
+        }
+      }
+
+      function fetchEmotionAndSongs() {
+        if (!detectionStarted) return; // Ensure detection is active before fetching
+        fetch("/get_emotion_and_songs")
+          .then((response) => response.json())
+          .then((data) => {
+            // Update emotion display only if a valid emotion is received
+            if (data.emotion && data.emotion !== "Detecting...") {
+              lastDetectedEmotion = data.emotion; // Store the last detected emotion
+              updateEmotionDisplay(data.emotion);
+            } else if (data.emotion === "No Face") {
+              updateEmotionDisplay("No Face"); // Show "No Face" immediately
+            } else if (data.emotion === "Processing...") {
+              updateEmotionDisplay("Processing...");
+            }
+
+            let songsContainer = document.getElementById("songs-container");
+            songsContainer.innerHTML = ""; // Clear previous cards
+
+            if (data.songs && data.songs.length > 0) {
+              data.songs.forEach(function (song) {
+                let songCard = document.createElement("div");
+                songCard.classList.add("song-card");
+                // song[0] is Name, song[1] is Artist, song[2] is URL
+                songCard.innerHTML = `
+                    <a href="${song[2]}" target="_blank">
+                        <div class="song-info">
+                            <div class="song-title">${song[0]}</div>
+                            <div class="song-artist">${song[1]}</div>
+                        </div>
+                    </a>
+                  `;
+                songsContainer.appendChild(songCard);
+              });
+            } else {
+              // Display specific message if detection is active but no songs or "no face"
+              if (
+                detectionStarted &&
+                (data.emotion === "No Face" || data.emotion === "Processing...")
+              ) {
+                songsContainer.innerHTML = `<div class='initial-message'>No recommendations available while ${
+                  emotionEmojis[data.emotion.replace(" ", "").replace(":", "")]
+                }.</div>`;
+              } else {
+                songsContainer.innerHTML =
+                  "<div class='initial-message'>No recommendations yet or for this emotion.</div>";
+              }
+            }
+          })
+          .catch((error) => {
+            console.error("Error fetching emotion and songs:", error);
+            updateEmotionDisplay("Error fetching data.");
+            let songsContainer = document.getElementById("songs-container");
+            songsContainer.innerHTML =
+              "<div class='initial-message'>Failed to load recommendations. Please try again.</div>";
+          });
+      }
+    </script>
+  </body>
+</html>
