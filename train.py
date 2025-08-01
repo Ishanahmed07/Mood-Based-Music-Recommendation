@@ -48,8 +48,8 @@ emotion_model.compile(loss='categorical_crossentropy', optimizer=Adam(learning_r
 
 emotion_model_info = emotion_model.fit(
     train_generator,
-    steps_per_epoch = 28709 // 64,
-    epochs=75,
+    steps_per_epoch = 28709 // 32,
+    epochs=80,
     validation_data = val_generator,
     validation_steps = 7178 // 64
 )
